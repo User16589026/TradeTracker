@@ -10,7 +10,7 @@ import {
 import { Stats, Trade } from '@/lib/types';
 import ReactMarkdown from 'react-markdown';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 interface Message {
     id: string;

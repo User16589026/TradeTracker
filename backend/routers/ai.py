@@ -21,7 +21,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    provider: Literal["openai", "gemini"] = "openai"
+    provider: Literal["openai", "gemini", "deepseek"] = "openai"
     api_key: str
     model: Optional[str] = None
     trading_context: Optional[dict] = None
@@ -30,7 +30,7 @@ class ChatRequest(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    provider: Literal["openai", "gemini"] = "openai"
+    provider: Literal["openai", "gemini", "deepseek"] = "openai"
     api_key: str
     stats: dict
     question: Optional[str] = None
@@ -38,7 +38,7 @@ class AnalyzeRequest(BaseModel):
 
 
 class QuickInsightRequest(BaseModel):
-    provider: Literal["openai", "gemini"] = "openai"
+    provider: Literal["openai", "gemini", "deepseek"] = "openai"
     api_key: str
     stats: dict
     trades: Optional[List[dict]] = None
@@ -126,6 +126,61 @@ AVAILABLE_TOOLS = [
                     "priority": {"type": "string", "enum": ["high", "medium", "all"]}
                 },
                 "required": []
+            }
+        }
+    },
+    # ============ MongoDB Tools for Agentic AI ============
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock_analysis",
+            "description": "ดึงรายงานวิเคราะห์หุ้นล่าสุดจาก database สำหรับ ticker ที่ระบุ เช่น NVDA, MSFT, AAPL",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "Stock ticker symbol เช่น NVDA, MSFT, AAPL"}
+                },
+                "required": ["ticker"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_all_analyses",
+            "description": "ดึงรายการหุ้นทั้งหมดที่มีการวิเคราะห์ใน database พร้อม decision (BUY/SELL/HOLD)",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "จำนวนรายการที่ต้องการ (default: 10)"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_decision_summary",
+            "description": "สรุปจำนวน BUY/SELL/HOLD decisions ทั้งหมดใน database",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_chat_history",
+            "description": "ดึงประวัติการสนทนาเกี่ยวกับ ticker ที่ระบุ",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "Stock ticker symbol"}
+                },
+                "required": ["ticker"]
             }
         }
     }
@@ -219,7 +274,191 @@ def execute_tool(tool_name: str, arguments: dict, context: dict) -> str:
         
         return "🔍 Trading Patterns:\n" + "\n".join(patterns)
     
+    # MongoDB tools will be handled by execute_tool_async
+    elif tool_name in ["get_stock_analysis", "get_all_analyses", "get_decision_summary", "get_chat_history"]:
+        return f"[ASYNC_TOOL:{tool_name}]"  # Marker for async handling
+    
     return f"Tool {tool_name} executed"
+
+
+# MongoDB connection for AI tools
+from motor.motor_asyncio import AsyncIOMotorClient
+MONGO_URI = "mongodb+srv://new_user_44444:new_user_44444@cluster0.amwffev.mongodb.net/?appName=Cluster0"
+mongo_client: AsyncIOMotorClient = None
+
+async def get_mongo_client():
+    global mongo_client
+    if mongo_client is None:
+        mongo_client = AsyncIOMotorClient(MONGO_URI)
+    return mongo_client
+
+
+async def execute_tool_async(tool_name: str, arguments: dict, context: dict) -> str:
+    """Execute async tools (MongoDB queries)"""
+    client = await get_mongo_client()
+    db = client["trading-bot"]
+    
+    if tool_name == "get_stock_analysis":
+        ticker = arguments.get("ticker", "").upper()
+        doc = await db["analyses"].find_one(
+            {"ticker": ticker},
+            sort=[("analysis_date", -1)]
+        )
+        if not doc:
+            return f"❌ ไม่พบข้อมูลวิเคราะห์สำหรับ {ticker}"
+        
+        return f"""📊 **รายงานวิเคราะห์ {ticker}**
+📅 วันที่: {doc.get('analysis_date', 'N/A')}
+🎯 Decision: **{doc.get('final_decision', 'N/A')}**
+
+{doc.get('report_content', '')[:1500]}"""
+    
+    elif tool_name == "get_all_analyses":
+        limit = arguments.get("limit", 10)
+        cursor = db["analyses"].find().sort("analysis_date", -1).limit(limit)
+        results = []
+        async for doc in cursor:
+            results.append(f"- **{doc.get('ticker')}**: {doc.get('final_decision')} ({str(doc.get('analysis_date', ''))[:10]})")
+        
+        if not results:
+            return "❌ ไม่พบข้อมูลวิเคราะห์ใน database"
+        
+        return f"📈 **รายการหุ้นที่วิเคราะห์ล่าสุด ({len(results)} รายการ)**\n" + "\n".join(results)
+    
+    elif tool_name == "get_decision_summary":
+        pipeline = [
+            {"$group": {"_id": "$final_decision", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}
+        ]
+        results = []
+        async for doc in db["analyses"].aggregate(pipeline):
+            decision = doc["_id"] or "Unknown"
+            count = doc["count"]
+            emoji = "🟢" if "BUY" in str(decision).upper() else "🔴" if "SELL" in str(decision).upper() else "🟡"
+            results.append(f"{emoji} {decision}: {count} หุ้น")
+        
+        if not results:
+            return "❌ ไม่พบข้อมูล decisions"
+        
+        return "📊 **สรุป Decisions ใน Database**\n" + "\n".join(results)
+    
+    elif tool_name == "get_chat_history":
+        ticker = arguments.get("ticker", "").upper()
+        cursor = db["chat_messages"].find({"ticker": ticker}).sort("timestamp", -1).limit(10)
+        messages = []
+        async for doc in cursor:
+            role = doc.get("role", "")
+            content = doc.get("content", "")[:200]
+            messages.append(f"[{role}] {content}...")
+        
+        if not messages:
+            return f"❌ ไม่พบประวัติสนทนาสำหรับ {ticker}"
+        
+        return f"💬 **ประวัติสนทนาเกี่ยวกับ {ticker}**\n" + "\n".join(messages[:5])
+    
+    return f"Unknown async tool: {tool_name}"
+
+
+# ============ Chat Storage for RAG ============
+
+async def save_chat_to_db(session_id: str, user_message: str, assistant_response: str, 
+                           trading_context: dict = None):
+    """Save chat to MongoDB for future RAG retrieval"""
+    try:
+        client = await get_mongo_client()
+        db = client["trading-bot"]
+        
+        # Create chat document
+        chat_doc = {
+            "session_id": session_id,
+            "timestamp": datetime.now(),
+            "user_message": user_message,
+            "assistant_response": assistant_response,
+            "trading_context_summary": {
+                "total_trades": trading_context.get('currentData', {}).get('performance', {}).get('totalTrades', 0) if trading_context else 0,
+                "win_rate": trading_context.get('currentData', {}).get('performance', {}).get('winRate', 0) if trading_context else 0,
+            } if trading_context else None,
+            "keywords": extract_keywords(user_message + " " + assistant_response)
+        }
+        
+        await db["chat_history"].insert_one(chat_doc)
+        
+    except Exception as e:
+        print(f"Error saving chat: {e}")
+
+
+def extract_keywords(text: str) -> List[str]:
+    """Extract simple keywords from text for search"""
+    # Simple keyword extraction - trading terms
+    trading_terms = [
+        "win rate", "profit", "loss", "drawdown", "trades", "balance",
+        "equity", "margin", "leverage", "symbol", "position", "risk",
+        "strategy", "entry", "exit", "stop loss", "take profit",
+        "xauusd", "eurusd", "gbpusd", "usdjpy", "gold", "forex"
+    ]
+    
+    text_lower = text.lower()
+    found = [term for term in trading_terms if term in text_lower]
+    return found
+
+
+async def get_relevant_history(session_id: str, query: str, limit: int = 5) -> List[dict]:
+    """Get relevant past conversations for RAG"""
+    try:
+        client = await get_mongo_client()
+        db = client["trading-bot"]
+        
+        # Get recent chats from this session
+        cursor = db["chat_history"].find(
+            {"session_id": session_id}
+        ).sort("timestamp", -1).limit(limit)
+        
+        history = []
+        async for doc in cursor:
+            history.append({
+                "user": doc.get("user_message", ""),
+                "assistant": doc.get("assistant_response", "")[:500],
+                "time": str(doc.get("timestamp", ""))
+            })
+        
+        return history
+        
+    except Exception as e:
+        print(f"Error getting history: {e}")
+        return []
+
+
+async def search_chat_history(query: str, limit: int = 3) -> List[dict]:
+    """Search across all chat history for relevant context (RAG)"""
+    try:
+        client = await get_mongo_client()
+        db = client["trading-bot"]
+        
+        # Extract query keywords
+        keywords = extract_keywords(query)
+        
+        if not keywords:
+            # Just get recent history
+            cursor = db["chat_history"].find().sort("timestamp", -1).limit(limit)
+        else:
+            # Search by keywords
+            cursor = db["chat_history"].find({
+                "keywords": {"$in": keywords}
+            }).sort("timestamp", -1).limit(limit)
+        
+        results = []
+        async for doc in cursor:
+            results.append({
+                "user": doc.get("user_message", ""),
+                "assistant": doc.get("assistant_response", "")[:300],
+                "keywords": doc.get("keywords", [])
+            })
+        
+        return results
+        
+    except Exception as e:
+        print(f"Error searching: {e}")
+        return []
 
 
 async def chat_openai_with_tools(messages: List[dict], api_key: str, model: str = "gpt-4o", 
@@ -265,7 +504,12 @@ async def chat_openai_with_tools(messages: List[dict], api_key: str, model: str 
                     arguments = {}
                     
                 tools_used.append(tool_name)
-                result = execute_tool(tool_name, arguments, context or {})
+                
+                # Check if it's an async MongoDB tool
+                if tool_name in ["get_stock_analysis", "get_all_analyses", "get_decision_summary", "get_chat_history"]:
+                    result = await execute_tool_async(tool_name, arguments, context or {})
+                else:
+                    result = execute_tool(tool_name, arguments, context or {})
                 
                 tool_messages.append({
                     "role": "tool",
@@ -322,6 +566,31 @@ async def chat_openai(messages: List[dict], api_key: str, model: str = "gpt-4o-m
         return data["choices"][0]["message"]["content"]
 
 
+async def chat_deepseek(messages: List[dict], api_key: str, model: str = "deepseek-chat") -> str:
+    """Call DeepSeek API (OpenAI-compatible format)"""
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": model,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 2000
+            }
+        )
+        
+        if response.status_code != 200:
+            error = response.json().get("error", {}).get("message", "Unknown error")
+            raise HTTPException(status_code=response.status_code, detail=f"DeepSeek Error: {error}")
+        
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+
 async def chat_gemini(messages: List[dict], api_key: str, model: str = "gemini-2.0-flash") -> str:
     """Call Google Gemini API"""
     contents = []
@@ -367,63 +636,99 @@ async def chat_gemini(messages: List[dict], api_key: str, model: str = "gemini-2
 
 def build_enhanced_system_prompt(trading_context: Optional[dict] = None) -> str:
     """Build enhanced system prompt with detailed trading context"""
-    base_prompt = """คุณเป็น **Trading Performance Analyst** ระดับ Professional ที่มีความเชี่ยวชาญด้าน:
-- Technical Analysis และ Price Action
-- Risk Management และ Position Sizing
-- Trading Psychology และ Behavioral Finance
-- Statistical Analysis ของ Trading Performance
+    base_prompt = """คุณเป็น **Trading Performance Analyst** ของ TradeTracker Dashboard
+คุณมีหน้าที่วิเคราะห์ผลการเทรดจากข้อมูลที่ระบบส่งมาให้
 
-## 🎯 หน้าที่หลัก:
-1. **วิเคราะห์** ผลการเทรดอย่างละเอียด พร้อมเหตุผลทางสถิติ
-2. **ระบุ** จุดแข็งที่ควรรักษา และจุดอ่อนที่ต้องแก้ไข
-3. **แนะนำ** action items ที่ปฏิบัติได้จริง จัดลำดับความสำคัญ
-4. **คำนวณ** และแนะนำ position sizing ที่เหมาะสม
-
-## 📋 รูปแบบการตอบ:
-- ใช้ภาษาไทยเป็นหลัก
-- แบ่งหัวข้อชัดเจน ใช้ emoji เพื่อให้อ่านง่าย
-- เน้นข้อมูลเชิงปริมาณ (ตัวเลข, %)
-- ให้คำแนะนำที่ actionable และ specific
-- หลีกเลี่ยงคำตอบกว้างๆ ที่ไม่เฉพาะเจาะจง
-
-## 🛠️ Tools ที่คุณใช้ได้:
-- analyze_win_rate: วิเคราะห์ Win Rate
-- calculate_optimal_position: คำนวณ Position Size
-- risk_assessment: ประเมินความเสี่ยง
-- identify_trading_patterns: ค้นหา patterns
-- generate_action_items: สร้าง action items"""
+## 🎯 สิ่งสำคัญ:
+- **คุณสามารถเห็นข้อมูลการเทรดของผู้ใช้ได้** (ดูด้านล่าง)
+- ตอบจากข้อมูลจริงเท่านั้น อย่าเดา
+- ใช้ภาษาไทย กระชับ ตรงประเด็น
+- ถ้าถูกถามเกี่ยวกับข้อมูลที่ไม่มี ให้บอกตรงๆ ว่าไม่มีข้อมูล"""
     
     if trading_context:
-        # Extract key metrics
-        stats = trading_context
+        # Handle nested structure from frontend
+        current_data = trading_context.get('currentData', trading_context)
+        account = current_data.get('account', {})
+        performance = current_data.get('performance', current_data)
+        trades = current_data.get('recentTrades', [])
+        symbols = current_data.get('symbolBreakdown', {})
         
-        # Performance summary
-        gain = stats.get('absolute_gain', 0)
-        performance = "ยอดเยี่ยม 🌟" if gain > 20 else "ดี ✅" if gain > 10 else "ปานกลาง ⚠️" if gain > 0 else "ต้องปรับปรุง ❌"
+        # Account info
+        account_str = ""
+        if account:
+            account_str = f"""
+## 💼 บัญชีของผู้ใช้:
+- Login: {account.get('login', 'N/A')}
+- Balance: ${account.get('balance', 0):,.2f}
+- Equity: ${account.get('equity', 0):,.2f}
+- Free Margin: ${account.get('freeMargin', 0):,.2f}
+- Leverage: 1:{account.get('leverage', 0)}
+- Server: {account.get('server', 'N/A')}"""
         
-        context_str = f"""
-
-## 📊 ข้อมูลสถิติการเทรดของผู้ใช้:
-
-### ภาพรวม
-| Metric | Value | Status |
-|--------|-------|--------|
-| Total Gain | {gain:.2f}% | {performance} |
-| Net Profit | ${stats.get('total_profit', 0):,.2f} | - |
-| Win Rate | {stats.get('win_rate', 0):.1f}% | {"✅" if stats.get('win_rate', 0) >= 50 else "⚠️"} |
-| Profit Factor | {stats.get('profit_factor', 0):.2f} | {"✅" if stats.get('profit_factor', 0) >= 1.5 else "⚠️"} |
-| Max Drawdown | {stats.get('max_drawdown', 0):.1f}% | {"✅" if stats.get('max_drawdown', 0) < 15 else "⚠️"} |
-
-### รายละเอียด
-- Total Trades: {stats.get('total_trades', 0)}
-- Winning: {stats.get('winning_trades', 0)} | Losing: {stats.get('losing_trades', 0)}
-- Avg Win: ${stats.get('avg_win', 0):,.2f} | Avg Loss: ${stats.get('avg_loss', 0):,.2f}
-- Largest Win: ${stats.get('largest_win', 0):,.2f} | Largest Loss: ${stats.get('largest_loss', 0):,.2f}
-- Sharpe Ratio: {stats.get('sharpe_ratio', 0):.2f}
-
-ใช้ข้อมูลเหล่านี้ในการวิเคราะห์และให้คำแนะนำที่ตรงจุด"""
+        # Performance stats
+        perf_str = ""
+        if performance:
+            total_trades = performance.get('totalTrades', performance.get('total_trades', 0))
+            win_rate = performance.get('winRate', performance.get('win_rate', 0))
+            profit_factor = performance.get('profitFactor', performance.get('profit_factor', 0))
+            total_profit = performance.get('totalProfit', performance.get('total_profit', 0))
+            max_dd = performance.get('maxDrawdown', performance.get('max_drawdown', 0))
+            
+            perf_str = f"""
+## 📊 สถิติการเทรด:
+| Metric | Value |
+|--------|-------|
+| Total Trades | {total_trades} |
+| Winning | {performance.get('winningTrades', performance.get('winning_trades', 0))} |
+| Losing | {performance.get('losingTrades', performance.get('losing_trades', 0))} |
+| Win Rate | {win_rate:.1f}% |
+| Profit Factor | {profit_factor:.2f} |
+| Total Profit | ${total_profit:,.2f} |
+| Max Drawdown | {max_dd:.1f}% |
+| Avg Win | ${performance.get('avgWin', performance.get('avg_win', 0)):,.2f} |
+| Avg Loss | ${performance.get('avgLoss', performance.get('avg_loss', 0)):,.2f} |
+| Largest Win | ${performance.get('largestWin', performance.get('largest_win', 0)):,.2f} |
+| Largest Loss | ${performance.get('largestLoss', performance.get('largest_loss', 0)):,.2f} |
+| Sharpe Ratio | {performance.get('sharpeRatio', performance.get('sharpe_ratio', 0)):.2f} |
+| Total Gain | {performance.get('totalGain', performance.get('absolute_gain', 0)):.2f}% |"""
         
-        base_prompt += context_str
+        # Recent trades
+        trades_str = ""
+        if trades and len(trades) > 0:
+            trades_list = "\n".join([
+                f"- {t.get('symbol')} | {t.get('type')} | {t.get('volume')} lots | ${t.get('profit', 0):,.2f} | {t.get('time', '')[:16]}"
+                for t in trades[:10]
+            ])
+            trades_str = f"""
+## 📈 Trades ล่าสุด (10 รายการ):
+{trades_list}"""
+        
+        # Symbol breakdown
+        symbol_str = ""
+        if symbols:
+            symbol_list = "\n".join([
+                f"- {sym}: {data.get('count', 0)} trades, ${data.get('profit', 0):,.2f}, {data.get('wins', 0)} wins"
+                for sym, data in list(symbols.items())[:5]
+            ])
+            symbol_str = f"""
+## 🎯 Symbol Breakdown:
+{symbol_list}"""
+        
+        base_prompt += account_str + perf_str + trades_str + symbol_str
+        
+        base_prompt += """
+
+## 📌 คำแนะนำตอบ:
+- ถ้าผู้ใช้ถาม "เห็นอะไรบ้าง" → บอกข้อมูลที่เห็นด้านบน
+- ถ้าผู้ใช้ถาม "วันนี้เทรดเป็นไง" → ดูจาก trades ล่าสุด
+- ถ้าผู้ใช้ถามเรื่อง win rate, profit → ตอบจากตาราง
+- ตอบกระชับ ไม่ต้องยาว"""
+    else:
+        base_prompt += """
+
+## ⚠️ ไม่มีข้อมูลการเทรด
+ผู้ใช้ยังไม่ได้เชื่อมต่อ MT5 หรือยังไม่มี trades
+แนะนำให้กด Connect ที่หน้าเว็บก่อน"""
     
     return base_prompt
 
@@ -464,6 +769,9 @@ async def chat(request: ChatRequest):
                 )
             else:
                 response = await chat_openai(messages, request.api_key, model)
+        elif request.provider == "deepseek":
+            model = request.model or "deepseek-chat"
+            response = await chat_deepseek(messages, request.api_key, model)
         else:
             model = request.model or "gemini-2.0-flash"
             response = await chat_gemini(messages, request.api_key, model)
@@ -476,6 +784,14 @@ async def chat(request: ChatRequest):
             conversation_memory[session_id].append({"role": "assistant", "content": response})
             # Keep last 20 messages
             conversation_memory[session_id] = conversation_memory[session_id][-20:]
+        
+        # Save to MongoDB for RAG
+        await save_chat_to_db(
+            session_id=session_id,
+            user_message=request.messages[-1].content,
+            assistant_response=response,
+            trading_context=request.trading_context
+        )
         
         return ChatResponse(
             response=response, 
@@ -544,6 +860,8 @@ Insights ที่วิเคราะห์ได้:
         
         if request.provider == "openai":
             response = await chat_openai(messages, request.api_key, "gpt-4o-mini")
+        elif request.provider == "deepseek":
+            response = await chat_deepseek(messages, request.api_key, "deepseek-chat")
         else:
             response = await chat_gemini(messages, request.api_key, "gemini-2.0-flash")
         
@@ -599,6 +917,8 @@ async def analyze(request: AnalyzeRequest):
         
         if request.provider == "openai":
             response = await chat_openai(messages, request.api_key, "gpt-4o-mini")
+        elif request.provider == "deepseek":
+            response = await chat_deepseek(messages, request.api_key, "deepseek-chat")
         else:
             response = await chat_gemini(messages, request.api_key, "gemini-2.0-flash")
         
@@ -627,3 +947,76 @@ async def get_memory(session_id: str):
         "messages": conversation_memory.get(session_id, []),
         "count": len(conversation_memory.get(session_id, []))
     }
+
+
+# ============ Chat History API (MongoDB) ============
+
+@router.get("/history/{session_id}")
+async def get_chat_history_from_db(session_id: str, limit: int = 20):
+    """Get chat history from MongoDB for a session"""
+    try:
+        history = await get_relevant_history(session_id, "", limit)
+        return {"session_id": session_id, "history": history, "count": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history/search")
+async def search_history(query: str, limit: int = 5):
+    """Search chat history for RAG (keyword-based)"""
+    try:
+        results = await search_chat_history(query, limit)
+        keywords = extract_keywords(query)
+        return {"query": query, "keywords": keywords, "results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/{session_id}")
+async def clear_chat_history(session_id: str):
+    """Clear chat history from MongoDB for a session"""
+    try:
+        client = await get_mongo_client()
+        db = client["trading-bot"]
+        result = await db["chat_history"].delete_many({"session_id": session_id})
+        return {"message": f"Deleted {result.deleted_count} messages from session {session_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions")
+async def get_all_sessions():
+    """Get all chat sessions from MongoDB"""
+    try:
+        client = await get_mongo_client()
+        db = client["trading-bot"]
+        
+        # Get distinct session IDs with their messages
+        pipeline = [
+            {"$sort": {"timestamp": -1}},
+            {"$group": {
+                "_id": "$session_id",
+                "messages": {"$push": {
+                    "user": "$user_message",
+                    "assistant": "$assistant_response",
+                    "timestamp": "$timestamp"
+                }},
+                "lastMessage": {"$first": "$timestamp"},
+                "title": {"$first": "$user_message"}
+            }},
+            {"$sort": {"lastMessage": -1}},
+            {"$limit": 20}
+        ]
+        
+        sessions = []
+        async for doc in db["chat_history"].aggregate(pipeline):
+            sessions.append({
+                "id": doc["_id"],
+                "title": doc["title"][:30] + "..." if len(doc.get("title", "")) > 30 else doc.get("title", "New Chat"),
+                "messages": doc["messages"][:20],  # Last 20 messages
+                "lastMessage": str(doc["lastMessage"])
+            })
+        
+        return {"sessions": sessions, "count": len(sessions)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

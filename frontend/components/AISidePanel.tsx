@@ -37,7 +37,7 @@ interface AISidePanelProps {
     onToggleCollapse?: () => void;
 }
 
-type AIProvider = 'openai' | 'gemini';
+type AIProvider = 'openai' | 'gemini' | 'deepseek';
 
 const OPENAI_MODELS = [
     { value: 'gpt-4o', label: 'GPT-4o (Tools)' },
@@ -47,6 +47,11 @@ const OPENAI_MODELS = [
 const GEMINI_MODELS = [
     { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
     { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+];
+
+const DEEPSEEK_MODELS = [
+    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+    { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
 ];
 
 export default function AISidePanel({
@@ -65,26 +70,69 @@ export default function AISidePanel({
     const [provider, setProvider] = useState<AIProvider>('openai');
     const [openaiModel, setOpenaiModel] = useState('gpt-4o');
     const [geminiModel, setGeminiModel] = useState('gemini-2.0-flash');
+    const [deepseekModel, setDeepseekModel] = useState('deepseek-chat');
     const [openaiKey, setOpenaiKey] = useState('');
     const [geminiKey, setGeminiKey] = useState('');
+    const [deepseekKey, setDeepseekKey] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
-    // Load settings
+    // Load settings and chat sessions from localStorage
     useEffect(() => {
         const savedOpenai = localStorage.getItem('openai_api_key') || '';
         const savedGemini = localStorage.getItem('gemini_api_key') || '';
+        const savedDeepseek = localStorage.getItem('deepseek_api_key') || '';
         const savedProvider = localStorage.getItem('ai_provider') as AIProvider || 'openai';
         setOpenaiKey(savedOpenai);
         setGeminiKey(savedGemini);
+        setDeepseekKey(savedDeepseek);
         setProvider(savedProvider);
 
-        // Create initial session if none exists
-        if (sessions.length === 0) {
+        // Load saved chat sessions
+        const savedSessions = localStorage.getItem('ai_chat_sessions');
+        const savedActiveId = localStorage.getItem('ai_active_session_id');
+
+        if (savedSessions) {
+            try {
+                const parsed = JSON.parse(savedSessions);
+                // Restore dates
+                const restored = parsed.map((s: any) => ({
+                    ...s,
+                    createdAt: new Date(s.createdAt),
+                    messages: s.messages.map((m: any) => ({
+                        ...m,
+                        timestamp: new Date(m.timestamp)
+                    }))
+                }));
+                setSessions(restored);
+                if (savedActiveId && restored.find((s: any) => s.id === savedActiveId)) {
+                    setActiveSessionId(savedActiveId);
+                } else if (restored.length > 0) {
+                    setActiveSessionId(restored[0].id);
+                }
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                createNewSession();
+            }
+        } else {
             createNewSession();
         }
     }, []);
+
+    // Save sessions to localStorage whenever they change
+    useEffect(() => {
+        if (sessions.length > 0) {
+            localStorage.setItem('ai_chat_sessions', JSON.stringify(sessions));
+        }
+    }, [sessions]);
+
+    // Save active session ID
+    useEffect(() => {
+        if (activeSessionId) {
+            localStorage.setItem('ai_active_session_id', activeSessionId);
+        }
+    }, [activeSessionId]);
 
     // Auto-scroll
     useEffect(() => {
@@ -113,12 +161,21 @@ export default function AISidePanel({
         }
     };
 
-    const getCurrentApiKey = () => provider === 'openai' ? openaiKey : geminiKey;
-    const getCurrentModel = () => provider === 'openai' ? openaiModel : geminiModel;
+    const getCurrentApiKey = () => {
+        if (provider === 'openai') return openaiKey;
+        if (provider === 'deepseek') return deepseekKey;
+        return geminiKey;
+    };
+    const getCurrentModel = () => {
+        if (provider === 'openai') return openaiModel;
+        if (provider === 'deepseek') return deepseekModel;
+        return geminiModel;
+    };
 
     const saveSettings = () => {
         localStorage.setItem('openai_api_key', openaiKey);
         localStorage.setItem('gemini_api_key', geminiKey);
+        localStorage.setItem('deepseek_api_key', deepseekKey);
         localStorage.setItem('ai_provider', provider);
         setShowSettings(false);
     };
@@ -230,7 +287,10 @@ export default function AISidePanel({
 
             const response = await fetch(`${API_BASE}/ai/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
                 body: JSON.stringify({
                     messages: [...currentMessages, userMessage].map(m => ({
                         role: m.role,
@@ -325,7 +385,7 @@ export default function AISidePanel({
                     <div>
                         <h2 className={`font-semibold ${textClass}`}>AI Assistant</h2>
                         <p className={`text-xs ${mutedClass}`}>
-                            {provider === 'openai' ? openaiModel : geminiModel}
+                            {provider === 'openai' ? openaiModel : provider === 'deepseek' ? deepseekModel : geminiModel}
                         </p>
                     </div>
                 </div>
@@ -393,27 +453,35 @@ export default function AISidePanel({
                         >
                             <option value="openai">OpenAI</option>
                             <option value="gemini">Gemini</option>
+                            <option value="deepseek">DeepSeek</option>
                         </select>
                     </div>
                     <div>
                         <label className={`text-xs ${mutedClass}`}>Model</label>
                         <select
                             value={getCurrentModel()}
-                            onChange={(e) => provider === 'openai' ? setOpenaiModel(e.target.value) : setGeminiModel(e.target.value)}
+                            onChange={(e) => {
+                                if (provider === 'openai') setOpenaiModel(e.target.value);
+                                else if (provider === 'deepseek') setDeepseekModel(e.target.value);
+                                else setGeminiModel(e.target.value);
+                            }}
                             className={`w-full mt-1 px-3 py-2 rounded-lg text-sm ${inputBg} ${textClass} border ${borderClass}`}
                         >
-                            {(provider === 'openai' ? OPENAI_MODELS : GEMINI_MODELS).map(m => (
+                            {(provider === 'openai' ? OPENAI_MODELS : provider === 'deepseek' ? DEEPSEEK_MODELS : GEMINI_MODELS).map(m => (
                                 <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
-                        </select>
+                            ))}                        </select>
                     </div>
                     <div>
                         <label className={`text-xs ${mutedClass}`}>API Key</label>
                         <input
                             type="password"
                             value={getCurrentApiKey()}
-                            onChange={(e) => provider === 'openai' ? setOpenaiKey(e.target.value) : setGeminiKey(e.target.value)}
-                            placeholder="sk-..."
+                            onChange={(e) => {
+                                if (provider === 'openai') setOpenaiKey(e.target.value);
+                                else if (provider === 'deepseek') setDeepseekKey(e.target.value);
+                                else setGeminiKey(e.target.value);
+                            }}
+                            placeholder={provider === 'deepseek' ? 'sk-...' : provider === 'openai' ? 'sk-...' : 'AI...'}
                             className={`w-full mt-1 px-3 py-2 rounded-lg text-sm ${inputBg} ${textClass} border ${borderClass}`}
                         />
                     </div>

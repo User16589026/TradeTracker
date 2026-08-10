@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import KPICard from "@/components/KPICard";
+import { TrendingUp, DollarSign, Activity, Gauge, Shield, AlertTriangle } from "lucide-react";
 
 interface GoldData {
   balance: number; equity: number; peak: number; floor: number;
@@ -14,98 +16,165 @@ export default function GoldPage() {
   const [data, setData] = useState<GoldData | null>(null);
 
   useEffect(() => {
-    // Fetch from the data.json that's deployed alongside this app
     fetch("/data.json", { cache: "no-store" })
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => {});
+      .then((r) => r.json()).then(setData).catch(() => {});
     const t = setInterval(() => {
       fetch("/data.json", { cache: "no-store" })
-        .then((r) => r.json())
-        .then(setData)
-        .catch(() => {});
+        .then((r) => r.json()).then(setData).catch(() => {});
     }, 60000);
     return () => clearInterval(t);
   }, []);
 
-  if (!data) return <div className="p-8 text-gray-400 text-center text-sm">Loading...</div>;
+  if (!data) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex gap-2 items-center text-slate-400 text-sm">
+        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+        Loading FinRLX Gold...
+      </div>
+    </div>
+  );
+
   const d = data;
-  const sigColor = d.signal === "ENTER" ? "bg-green-900 text-green-400" : d.signal === "WAIT" ? "bg-blue-900 text-blue-400" : "bg-red-900 text-red-400";
-  const ddColor = d.dd_pct > 10 ? "text-red-400" : d.dd_pct > 5 ? "text-yellow-400" : "text-green-400";
+  const isDark = true;
+  const pnlColor = d.total_pnl >= 0 ? "text-emerald-400" : "text-rose-400";
+  const pnlSign = d.total_pnl >= 0 ? "+" : "";
+  const signalColor = d.signal === "ENTER" ? "text-emerald-400" : d.signal === "WAIT" ? "text-blue-400" : "text-rose-400";
+  const signalBg = d.signal === "ENTER" ? "bg-emerald-500/10 border-emerald-500/30" : d.signal === "WAIT" ? "bg-blue-500/10 border-blue-500/30" : "bg-rose-500/10 border-rose-500/30";
+  const ddColor = d.dd_pct > 10 ? "text-rose-400" : d.dd_pct > 5 ? "text-amber-400" : "text-emerald-400";
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto text-white">
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold text-blue-400">🥇 FinRLX Gold v4 — Live</h1>
-        <span className="text-[10px] text-gray-500">{d.updated}</span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">FinRLX Gold v4</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Live · Updated {d.updated}</p>
+        </div>
+        <div className={`px-4 py-2 rounded-xl border text-sm font-semibold ${signalBg} ${signalColor}`}>
+          {d.signal === "ENTER" ? "🟢 BUY" : d.signal === "WAIT" ? "⏸ WAIT" : "🔒 LOCKED"}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card label="💰 Balance" value={`${d.balance.toLocaleString()} USC`} color={d.balance > 5000 ? "text-green-400" : "text-yellow-400"} sub={`Peak: ${d.peak.toLocaleString()} | PnL: ${d.total_pnl >= 0 ? "+" : ""}${d.total_pnl.toLocaleString()}`} />
-        <Card label="🎯 Signal" value={d.signal} color="" sig={sigColor} sub={`Trend: ${d.trend} | ADX: ${d.adx}`} />
-        <Card label="📉 Drawdown" value={`${d.dd_pct.toFixed(1)}%`} color={ddColor} sub={`Buffer: ${d.buffer.toLocaleString()} → ${d.floor.toLocaleString()}`} bar={`${Math.min(d.dd_pct * 3, 100)}%`} />
-        <Card label="📊 Price/KAMA" value={d.price?.toFixed(2) || "—"} color="text-blue-400" sub={`KAMA: ${d.kama?.toFixed(2) || "—"} | ATR: ${d.atr?.toFixed(1) || "—"}`} />
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard
+          label="Balance"
+          value={`${d.balance.toLocaleString()} USC`}
+          subValue={`Peak: ${d.peak.toLocaleString()} | PnL: ${pnlSign}${d.total_pnl.toLocaleString()}`}
+          icon={DollarSign}
+          trend={d.total_pnl >= 0 ? "up" : "down"}
+          isDark={isDark}
+        />
+        <KPICard
+          label="Drawdown"
+          value={`${d.dd_pct.toFixed(1)}%`}
+          subValue={`Buffer: ${d.buffer.toLocaleString()} → Floor ${d.floor.toLocaleString()}`}
+          icon={Activity}
+          trend={d.dd_pct > 5 ? "down" : "up"}
+          isDark={isDark}
+        />
+        <KPICard
+          label="Price / KAMA"
+          value={d.price?.toFixed(2) || "—"}
+          subValue={`KAMA: ${d.kama?.toFixed(2) || "—"} | ATR: ${d.atr?.toFixed(1) || "—"}`}
+          icon={TrendingUp}
+          trend={d.trend === "UPTREND" ? "up" : "down"}
+          isDark={isDark}
+        />
+        <KPICard
+          label="ADX"
+          value={d.adx?.toFixed(1) || "—"}
+          subValue={`${d.adx >= 25 ? "✓ Ready" : "○ Below 25"} | Turb: ${d.turb ? "⚠ High" : "✓ Calm"}`}
+          icon={Gauge}
+          trend={d.adx >= 25 ? "up" : "neutral"}
+          isDark={isDark}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="text-[10px] text-gray-500 uppercase mb-2">📋 Recent Activity</div>
+      {/* Bottom: Activity + Safety */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Recent Activity */}
+        <div className="lg:col-span-2 rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-6">
+          <h3 className="text-sm font-medium text-slate-400 mb-4 tracking-wide uppercase">
+            Recent Activity
+          </h3>
           {d.position ? (
-            <div className="text-green-400 font-bold text-sm">
-              🔵 OPEN — BUY @ {d.position.entry} | SL {d.position.sl} | Lot {d.position.lot}
-              <br /><span className="text-xs">{d.position.profit >= 0 ? "+" : ""}{d.position.profit.toLocaleString()} USC</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-emerald-400">OPEN — BUY</div>
+                  <div className="text-xs text-slate-500">@{d.position.entry} | SL {d.position.sl} | Lot {d.position.lot}</div>
+                </div>
+                <div className={`text-sm font-semibold ${d.position.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {d.position.profit >= 0 ? "+" : ""}{d.position.profit.toLocaleString()} USC
+                </div>
+              </div>
             </div>
           ) : d.recent_log?.length ? (
-            <table className="w-full text-xs"><tbody>
+            <div className="space-y-2">
               {d.recent_log.slice(-6).reverse().map((r, i) => (
-                <tr key={i} className="border-b border-gray-700">
-                  <td className="py-1 text-gray-500">{(r.timestamp || "").slice(5, 16)}</td>
-                  <td className="py-1">{r.action}</td>
-                  <td className="py-1 text-gray-500">{r.detail || ""}</td>
-                </tr>
+                <div key={i} className="flex items-center gap-3 text-xs py-1.5 border-b border-slate-800/50 last:border-0">
+                  <span className="text-slate-600 w-28 shrink-0">{(r.timestamp || "").slice(5, 16)}</span>
+                  <span className={`font-medium w-14 shrink-0 ${r.action === "ENTER" ? "text-emerald-400" : r.action === "EXIT" ? "text-rose-400" : "text-slate-400"}`}>
+                    {r.action}
+                  </span>
+                  <span className="text-slate-500 truncate">{r.detail || ""}</span>
+                </div>
               ))}
-            </tbody></table>
-          ) : <div className="text-gray-500 text-xs">รอสัญญาณแรก...</div>}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-xs">รอสัญญาณแรก...</p>
+          )}
         </div>
 
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 text-xs space-y-3">
-          <div className="text-[10px] text-gray-500 uppercase">🛡 Safety</div>
-          <Bar label="Risk Used" pct={Math.min(((d.peak - d.balance) / 700) * 100, 100).toFixed(0)} color="bg-blue-500" sub={`${(d.peak - d.balance).toLocaleString()} / 700 USC`} />
-          <Bar label="Floor Buffer" pct={Math.min((d.buffer / 700) * 100, 100).toFixed(0)} color="bg-green-500" sub={`${d.buffer.toLocaleString()} USC`} />
-          <div className="space-x-2">
-            {d.locked ? <span>🔒 <span className="text-red-400">LOCKED</span></span> : <span>🔓 <span className="text-green-400">Ready</span></span>}
-            <span>|</span>
-            {d.turb ? <span>⚠ <span className="text-yellow-400">Turb</span></span> : <span>✓ <span className="text-green-400">Calm</span></span>}
-            <span>|</span>
-            {d.adx >= 25 ? <span>✅ <span className="text-green-400">ADX OK</span></span> : <span>⏸ <span className="text-yellow-400">ADX {d.adx.toFixed(1)}</span></span>}
+        {/* Safety Gates */}
+        <div className="rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-6 space-y-5">
+          <h3 className="text-sm font-medium text-slate-400 tracking-wide uppercase">
+            Safety Gates
+          </h3>
+
+          {/* Risk Bar */}
+          <div>
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-500">Max Risk</span>
+              <span className="text-slate-400">{(d.peak - d.balance).toLocaleString()} / 700 USC</span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(((d.peak - d.balance) / 700) * 100, 100)}%` }} />
+            </div>
+          </div>
+
+          {/* Floor Buffer */}
+          <div>
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-500">Floor Buffer</span>
+              <span className="text-slate-400">{d.buffer.toLocaleString()} USC</span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min((d.buffer / 700) * 100, 100)}%` }} />
+            </div>
+          </div>
+
+          {/* Status Chips */}
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className={`px-3 py-1.5 rounded-lg border ${d.locked ? "bg-rose-500/10 border-rose-500/30 text-rose-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
+              {d.locked ? "🔒 LOCKED" : "🔓 Ready"}
+            </span>
+            <span className={`px-3 py-1.5 rounded-lg border ${d.turb ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
+              {d.turb ? "⚠ Turbulent" : "✓ Calm"}
+            </span>
+            <span className={`px-3 py-1.5 rounded-lg border ${d.adx >= 25 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-slate-800 border-slate-700 text-slate-400"}`}>
+              {d.adx >= 25 ? "✅ ADX OK" : `○ ADX ${d.adx.toFixed(1)}`}
+            </span>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function Card({ label, value, color, sig, sub, bar }: { label: string; value: string; color: string; sig?: string; sub: string; bar?: string }) {
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-      <div className="text-[10px] text-gray-500 uppercase">{label}</div>
-      {sig ? (
-        <div className={`inline-block px-2 py-0.5 rounded text-sm font-bold mt-1 ${sig}`}>{value}</div>
-      ) : (
-        <div className={`text-lg font-bold mt-0.5 ${color}`}>{value}</div>
-      )}
-      {bar && <div className="w-full h-1.5 bg-gray-700 rounded mt-1"><div className="h-full bg-red-500 rounded" style={{ width: bar }} /></div>}
-      <div className="text-[10px] text-gray-500 mt-0.5">{sub}</div>
-    </div>
-  );
-}
-
-function Bar({ label, pct, color, sub }: { label: string; pct: string; color: string; sub: string }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <div className="w-full h-1.5 bg-gray-700 rounded mt-0.5"><div className={`h-full ${color} rounded`} style={{ width: `${Math.min(Number(pct), 100)}%` }} /></div>
-      <div className="text-gray-500">{sub}</div>
+      {/* Footer */}
+      <p className="text-center text-[10px] text-slate-600">
+        Auto-refresh 60s · Data from MT5 via cron · Risk 3%/trade · Floor 4,800 USC
+      </p>
     </div>
   );
 }

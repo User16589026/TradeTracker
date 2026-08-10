@@ -103,6 +103,8 @@ export default function Dashboard() {
     if (settings.customStartDate) setCustomStartDate(settings.customStartDate);
     if (settings.customEndDate) setCustomEndDate(settings.customEndDate);
     if (settings.defaultDateRange === 'custom') setShowCustomDates(true);
+    // Auto-load demo data — skip login
+    loadDemoData();
   }, []);
 
   // Save settings when they change

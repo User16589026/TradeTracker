@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trading Analytics Dashboard",
-  description: "Professional MT5 Trading Performance Analysis",
+  title: "Trading Dashboard",
+  description: "MT5 Trading Analytics & FinRLX Gold",
 };
 
 export default function RootLayout({
@@ -25,19 +25,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <nav className="bg-gray-900 border-b border-gray-700 px-6 py-3 flex gap-6 text-sm">
-          <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-            📊 Trade Tracker
-          </Link>
-          <Link href="/gold" className="text-yellow-400 hover:text-yellow-300 transition-colors font-medium">
-            🥇 FinRLX Gold
-          </Link>
+          <Link href="/" className="text-gray-400 hover:text-white">📊 Trade Tracker</Link>
+          <Link href="/gold" className="text-yellow-400 hover:text-yellow-300 font-medium">🥇 FinRLX Gold</Link>
         </nav>
-
         {children}
       </body>
     </html>

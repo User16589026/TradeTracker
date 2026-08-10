@@ -1,5 +1,12 @@
-import { redirect } from "next/navigation";
-
 export default function Home() {
-  redirect("/gold");
+  return (
+    <html>
+      <head>
+        <meta httpEquiv="refresh" content="0;url=/gold" />
+      </head>
+      <body>
+        <p>Redirecting to <a href="/gold">FinRLX Gold Dashboard</a>...</p>
+      </body>
+    </html>
+  );
 }

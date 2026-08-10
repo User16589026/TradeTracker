@@ -43,20 +43,20 @@ export default function GoldPage() {
   const ddColor = d.dd_pct > 10 ? "text-rose-400" : d.dd_pct > 5 ? "text-amber-400" : "text-emerald-400";
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">FinRLX Gold v4</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Live · Updated {d.updated}</p>
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">FinRLX Gold v4</h1>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">Live · {d.updated}</p>
         </div>
-        <div className={`px-4 py-2 rounded-xl border text-sm font-semibold ${signalBg} ${signalColor}`}>
-          {d.signal === "ENTER" ? "🟢 BUY" : d.signal === "WAIT" ? "⏸ WAIT" : "🔒 LOCKED"}
+        <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl border text-xs sm:text-sm font-semibold ${signalBg} ${signalColor}`}>
+          {d.signal === "ENTER" ? "BUY" : d.signal === "WAIT" ? "WAIT" : "LOCKED"}
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <KPICard
           label="Balance"
           value={`${d.balance.toLocaleString()} USC`}
@@ -92,31 +92,31 @@ export default function GoldPage() {
       </div>
 
       {/* Bottom: Activity + Safety */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
         {/* Recent Activity */}
-        <div className="lg:col-span-2 rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-6">
-          <h3 className="text-sm font-medium text-slate-400 mb-4 tracking-wide uppercase">
-            Recent Activity
+        <div className="lg:col-span-2 rounded-xl sm:rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-4 sm:p-6">
+          <h3 className="text-xs sm:text-sm font-medium text-slate-400 mb-3 sm:mb-4 tracking-wide uppercase">
+            Activity
           </h3>
           {d.position ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-emerald-400">OPEN — BUY</div>
-                  <div className="text-xs text-slate-500">@{d.position.entry} | SL {d.position.sl} | Lot {d.position.lot}</div>
+              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg sm:rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs sm:text-sm font-medium text-emerald-400">OPEN — BUY</div>
+                  <div className="text-[10px] sm:text-xs text-slate-500 truncate">@{d.position.entry} | SL {d.position.sl} | Lot {d.position.lot}</div>
                 </div>
-                <div className={`text-sm font-semibold ${d.position.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                <div className={`text-xs sm:text-sm font-semibold shrink-0 ${d.position.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                   {d.position.profit >= 0 ? "+" : ""}{d.position.profit.toLocaleString()} USC
                 </div>
               </div>
             </div>
           ) : d.recent_log?.length ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {d.recent_log.slice(-6).reverse().map((r, i) => (
-                <div key={i} className="flex items-center gap-3 text-xs py-1.5 border-b border-slate-800/50 last:border-0">
-                  <span className="text-slate-600 w-28 shrink-0">{(r.timestamp || "").slice(5, 16)}</span>
-                  <span className={`font-medium w-14 shrink-0 ${r.action === "ENTER" ? "text-emerald-400" : r.action === "EXIT" ? "text-rose-400" : "text-slate-400"}`}>
+                <div key={i} className="flex items-center gap-2 text-[10px] sm:text-xs py-1 border-b border-slate-800/50 last:border-0">
+                  <span className="text-slate-600 w-24 sm:w-28 shrink-0">{(r.timestamp || "").slice(5, 16)}</span>
+                  <span className={`font-medium w-12 sm:w-14 shrink-0 ${r.action === "ENTER" ? "text-emerald-400" : r.action === "EXIT" ? "text-rose-400" : "text-slate-400"}`}>
                     {r.action}
                   </span>
                   <span className="text-slate-500 truncate">{r.detail || ""}</span>
@@ -124,14 +124,14 @@ export default function GoldPage() {
               ))}
             </div>
           ) : (
-            <p className="text-slate-500 text-xs">รอสัญญาณแรก...</p>
+            <p className="text-slate-500 text-[10px] sm:text-xs">รอสัญญาณแรก...</p>
           )}
         </div>
 
         {/* Safety Gates */}
-        <div className="rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-6 space-y-5">
-          <h3 className="text-sm font-medium text-slate-400 tracking-wide uppercase">
-            Safety Gates
+        <div className="rounded-xl sm:rounded-2xl bg-slate-900/50 backdrop-blur-md border border-slate-800/50 shadow-xl p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <h3 className="text-xs sm:text-sm font-medium text-slate-400 tracking-wide uppercase">
+            Safety
           </h3>
 
           {/* Risk Bar */}
@@ -157,7 +157,7 @@ export default function GoldPage() {
           </div>
 
           {/* Status Chips */}
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
             <span className={`px-3 py-1.5 rounded-lg border ${d.locked ? "bg-rose-500/10 border-rose-500/30 text-rose-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
               {d.locked ? "🔒 LOCKED" : "🔓 Ready"}
             </span>

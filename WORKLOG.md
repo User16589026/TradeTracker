@@ -21,6 +21,18 @@ Cause:
 Safety boundary:
 - The dashboard pipeline is read-only against MT5. It only generates/publishes dashboard data; no trade order is created, modified, or closed.
 
+## 2026-08-11 11:08 — Restore public Performance UI
+
+Status: DONE
+
+Cause:
+- The Performance UI had been implemented locally but `frontend/app/gold/page.tsx` was not committed. The hourly publisher stages only `data.json`, so it never published the page code that renders the extra charts/tables.
+
+Done / verified:
+- Built the frontend: `npm ci && npm run build` — PASS; `/gold` generated as a static route.
+- Committed and pushed only the intended source plus this log: `db7dc4e feat(gold): restore performance charts`.
+- GitHub reported Vercel deployment `success` / `Deployment has completed`.
+- Loaded public `/gold` after deployment: Performance metrics, equity-curve section, exit-reason panel, and 7-row Closed Trades table are present.
+
 Remaining:
-- IN PROGRESS: publish the already-implemented `/gold` Performance UI (equity curve, exit-reason chart, and closed-trades table). It exists only as uncommitted source code, so the public Vercel build cannot render it yet.
 - Optional future improvement: replace/decrease the hourly static publication cadence if near-real-time floating P/L is required.

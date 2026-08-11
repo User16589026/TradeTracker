@@ -34,5 +34,18 @@ Done / verified:
 - GitHub reported Vercel deployment `success` / `Deployment has completed`.
 - Loaded public `/gold` after deployment: Performance metrics, equity-curve section, exit-reason panel, and 7-row Closed Trades table are present.
 
+## 2026-08-11 11:11 — Repair `/gold` layout regression
+
+Status: DONE
+
+Issue:
+- The newly restored Performance UI exposed a pre-existing Activity-row layout bug: long actions such as `BLOCKED` overflowed their narrow flex column and overlapped the ADX value. The Safety card also stretched to match the taller Activity card, leaving unnecessary empty space.
+
+Done / verified:
+- Replaced the Activity flex row with fixed CSS-grid columns and truncation, so action, ADX, and detail fields cannot overlap.
+- Set the Safety card to `self-start`, removing the large empty stretched area.
+- `npm run build` — PASS.
+- Opened the local `/gold` dashboard at desktop width: all eight Activity rows, including `BLOCKED`, are readable without overlap; the Safety card has compact natural height; the performance panels and 7-row Closed Trades table render correctly.
+
 Remaining:
 - Optional future improvement: replace/decrease the hourly static publication cadence if near-real-time floating P/L is required.

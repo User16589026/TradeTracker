@@ -113,7 +113,7 @@ export default function GoldPage() {
       </div>
 
       {/* Activity + Safety */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 items-start">
         {/* Activity */}
         <Card className="sm:col-span-2">
           <div className="text-[10px] sm:text-xs text-slate-500 mb-2">Activity</div>
@@ -128,13 +128,13 @@ export default function GoldPage() {
           {d.recent_log?.length ? (
             <div className="space-y-0.5">
               {d.recent_log.slice(-8).reverse().map((r, i) => (
-                <div key={i} className="flex gap-2 text-[10px] sm:text-xs py-0.5 border-b border-slate-800/40 last:border-0">
-                  <span className="text-slate-600 w-20 sm:w-24 shrink-0">{(r.timestamp || "").slice(5, 16)}</span>
-                  <span className={r.action === "ENTER" ? "text-emerald-400 font-medium w-10 shrink-0" : r.action?.includes("EXIT") ? "text-rose-400 font-medium w-10 shrink-0" : "text-slate-400 w-10 shrink-0"}>
+                <div key={i} className="grid grid-cols-[76px_64px_60px_minmax(0,1fr)] sm:grid-cols-[88px_64px_60px_minmax(0,1fr)] gap-x-2 text-[10px] sm:text-xs py-0.5 border-b border-slate-800/40 last:border-0">
+                  <span className="text-slate-600 truncate">{(r.timestamp || "").slice(5, 16)}</span>
+                  <span className={r.action === "ENTER" ? "text-emerald-400 font-medium truncate" : r.action?.includes("EXIT") ? "text-rose-400 font-medium truncate" : "text-slate-400 truncate"}>
                     {r.action}
                   </span>
-                  <span className="text-sky-400 shrink-0">ADX {r.adx ? Number(r.adx).toFixed(1) : "—"}</span>
-                  <span className="text-slate-500 truncate">{r.detail || ""}</span>
+                  <span className="text-sky-400 whitespace-nowrap">ADX {r.adx ? Number(r.adx).toFixed(1) : "—"}</span>
+                  <span className="text-slate-500 truncate min-w-0">{r.detail || ""}</span>
                 </div>
               ))}
             </div>
@@ -144,7 +144,7 @@ export default function GoldPage() {
         </Card>
 
         {/* Safety */}
-        <Card>
+        <Card className="self-start">
           <div className="text-[10px] sm:text-xs text-slate-500 mb-3">Safety</div>
 
           <div className="space-y-3">
